@@ -1,248 +1,284 @@
-# Demand Planning Dashboard
+# Demand Planning Dashboard (Take-Home Assessment)
 
-A comprehensive retail supply chain demand planning dashboard built with PostgreSQL, FastAPI, and Next.js TypeScript. This system enables retail supply chain teams to monitor weekly sales performance and review AI-generated forecasts at a SKU level.
+This repository contains my submission for the **Demand Planning Dashboard** take-home assessment.
 
-## 🏗️ Architecture
+The solution ingests the provided datasets (`aggregated_data.csv` and `forecast_data.csv`), loads them into a local database, serves them through a backend API, and visualizes them in a two-page Next.js dashboard.
 
+## Assessment Requirements Mapped
+
+- **Frontend**: Next.js 14 (React + TypeScript)
+- **Backend**: Python FastAPI
+- **Database**: PostgreSQL (local, via Docker)
+- **Submission artifact**: GitHub repo with setup + design notes in README
+
+## Data Used
+
+- `aggregated_data.csv` (historical weekly actuals)
+- `forecast_data.csv` (40-week model forecasts + percentiles + projected drivers)
+
+Implementation note: dashboard APIs use the latest available inference context and combine **last 13 historical weeks** with **next 39 forecast weeks** for the primary views.
+
+## Architecture
+
+- **Frontend**: Next.js App Router + Tailwind CSS
+- **Backend**: FastAPI + SQLAlchemy
 - **Database**: PostgreSQL 15
-- **Backend**: Python FastAPI with SQLAlchemy ORM
-- **Frontend**: Next.js 14 with TypeScript and Tailwind CSS
-- **Containerization**: Docker & Docker Compose
+- **Runtime**: Docker Compose (frontend + backend + database)
 
-## 📁 Project Structure
+## Project Structure
 
-```
+```text
 demand-planning-dashboard/
-├── backend/                    # FastAPI Backend
-│   ├── routers/               # API route handlers
-│   │   ├── skus.py           # SKU management endpoints
-│   │   ├── sales.py          # Sales data endpoints
-│   │   └── forecasts.py      # Forecast endpoints
-│   ├── main.py               # FastAPI application entry point
-│   ├── database.py           # Database configuration
-│   ├── models.py             # SQLAlchemy models
-│   ├── schemas.py            # Pydantic schemas
-│   ├── requirements.txt      # Python dependencies
-│   ├── Dockerfile           # Backend container config
-│   └── .env.example         # Environment variables template
-├── frontend/                  # Next.js Frontend
-│   ├── src/
-│   │   ├── app/              # Next.js 14 app directory
-│   │   ├── components/       # React components
-│   │   └── lib/              # Utilities and API client
-│   ├── package.json          # Node.js dependencies
-│   ├── tailwind.config.js    # Tailwind CSS configuration
-│   ├── tsconfig.json         # TypeScript configuration
-│   └── Dockerfile           # Frontend container config
-└── docker-compose.yml        # Multi-service orchestration
+├── backend/
+│   ├── main.py                  # FastAPI app + router registration
+│   ├── models.py                # SQLAlchemy schema
+│   ├── data_migration.py        # CSV parsing + load logic
+│   ├── run_migration.py         # Migration runner script
+│   ├── database.py              # DB connection/session config
+│   ├── requirements.txt
+│   └── routers/
+│       ├── demand_planning_simple.py
+│       ├── sku_detail_simple.py
+│       ├── skus.py
+│       ├── sales.py
+│       └── forecasts.py
+├── frontend/
+│   ├── src/app/page.tsx         # Demand Planning Home
+│   ├── src/app/sku/[itemId]/page.tsx  # SKU Detail Workbench
+│   └── src/components/
+└── docker-compose.yml
 ```
 
-## 🚀 Quick Start
+## Database Schema Design
 
-### Prerequisites
+To keep query access straightforward and performant for dashboard use-cases, the data is split into three main relational tables:
 
-- Docker and Docker Compose
-- Node.js 18+ (for local development)
-- Python 3.11+ (for local development)
+1. `skus`
+   - Master SKU identity and product metadata (`item_id`, name/category/brand, pricing fields)
+2. `sales_data`
+   - Historical weekly actuals (`item_id`, `week_ending`, `units_sold`, derived `revenue`)
+3. `forecasts`
+   - Forecasted weekly points (`item_id`, `forecast_date`, `predicted_units`, confidence metadata)
 
-### 1. Clone and Setup
+### JSON Normalization Strategy
+
+- `aggregated_data.demand_drivers` is parsed during migration; `avg_unit_price` is used to enrich SKU and compute revenue.
+- `forecast_data.forecasts` array is flattened into one row per forecast week.
+- Forecast confidence-related fields are derived and stored per weekly forecast record for easy API filtering and alerting.
+
+## Backend API
+
+Base URL: `http://localhost:8000`
+
+### Utility Endpoints
+
+- `GET /` — API metadata
+- `GET /health` — health check
+- `GET /docs` — Swagger UI
+
+### Demand Planning Endpoints (`/api/v1/demand-planning`)
+
+Endpoints used by the Home dashboard:
+
+- `GET /summary-stats`
+  - Returns historical totals, recent snapshot, and forecast summary blocks.
+- `GET /combined-timeline?historical_weeks=13&forecast_weeks=39`
+  - Returns timeline array with `type` = `historical | forecast`.
+- `GET /forecast-accuracy-alerts?confidence_threshold=0.3&limit=20`
+  - Returns ranked alert cards (`low_confidence`, `high_variance`) with severity.
+
+### SKU Detail Endpoints (`/api/v1/sku-detail`)
+
+Endpoints used by the SKU workbench:
+
+- `GET /sku/{item_id}`
+  - SKU metadata + `sales_summary` + `forecast_summary`.
+- `GET /sku/{item_id}/timeline?historical_weeks=13&forecast_weeks=39`
+  - Returns continuous weekly timeline payload for the 52-week chart.
+- `GET /sku/{item_id}/previous-year?weeks=52`
+  - Returns previous-year same-week series for overlay comparison.
+- `GET /sku/{item_id}/demand-drivers?weeks=52`
+  - Returns driver series (`avg_unit_price`, `cust_instock`) tagged as `historical | projected`.
+- `GET /search?query=<sku_or_name>&limit=20`
+  - Search endpoint powering SKU typeahead.
+
+### Core CRUD Endpoints
+
+Also implemented for data-level access:
+
+#### SKUs (`/api/v1/skus`)
+- `GET /?skip=0&limit=100&category=&brand=`
+- `GET /{item_id}`
+- `POST /`
+- `PUT /{item_id}`
+- `DELETE /{item_id}`
+
+#### Sales (`/api/v1/sales`)
+- `GET /?skip=0&limit=100&item_id=&region=&weeks_back=`
+- `GET /summary?weeks_back=4`
+- `GET /{item_id}/weekly?weeks_back=12`
+- `POST /`
+- `POST /bulk`
+
+#### Forecasts (`/api/v1/forecasts`)
+- `GET /?skip=0&limit=100&item_id=&is_active=true&forecast_period=weekly`
+- `GET /{item_id}/latest`
+- `GET /{item_id}/history?weeks_back=12`
+- `GET /summary`
+- `POST /`
+- `PUT /{forecast_id}`
+- `DELETE /{forecast_id}` (soft delete)
+
+### Example Response Shapes
+
+`GET /api/v1/demand-planning/summary-stats`
+
+```json
+{
+  "historical": {
+    "total_units_sold": 25842,
+    "total_revenue": 1250000.0,
+    "active_skus": 166,
+    "date_range": { "start": "2024-07-21", "end": "2025-04-20" }
+  },
+  "recent": { "units_sold": 2584, "revenue": 125000.0 },
+  "forecast": {
+    "total_predicted_units": 31010,
+    "total_predicted_revenue": 1500000.0,
+    "avg_confidence": 0.75,
+    "forecasted_skus": 166,
+    "total_forecasts": 84480
+  }
+}
+```
+
+`GET /api/v1/sku-detail/sku/{item_id}/timeline?historical_weeks=13&forecast_weeks=39`
+
+```json
+{
+  "item_id": "CUST_003_ITEM_0243",
+  "timeline_data": [
+    { "week_ending": "2025-01-26", "units": 820, "revenue": 3712.0, "type": "historical" },
+    { "week_ending": "2025-04-27", "units": 845, "revenue": 3981.0, "confidence_score": 0.72, "type": "forecast" }
+  ],
+  "period_summary": {
+    "historical_weeks": 13,
+    "forecast_weeks": 39,
+    "total_weeks": 52,
+    "anchor_week_ending": "2025-04-20"
+  }
+}
+```
+
+## Frontend Pages
+
+### 1) Demand Planning Home
+
+- Aggregated trend chart: historical units sold (13 weeks) + forecast (39 weeks)
+- Forecast attention alerts (confidence/variance driven)
+- Search/navigation into SKU-level workbench
+
+### 2) SKU Detail: Demand Planning Workbench
+
+- 52-week timeline (13 historical + 39 forecast)
+- Optional previous-year same-week comparison line
+- Demand drivers side panel with:
+  - `avg_unit_price` over time
+  - `cust_instock` over time
+  - historical + projected values
+
+## Setup Instructions
+
+## Prerequisites
+
+- Docker + Docker Compose
+- (Optional local dev) Python 3.11+
+- (Optional local dev) Node.js 18+
+
+## 1) Start services
+
+From project root (`demand-planning-dashboard`):
 
 ```bash
-cd /Users/santoshganti/Documents/GitHub/Strum-AI/demand-planning-dashboard
+docker-compose up -d --build
 ```
 
-### 2. Environment Configuration
+Services:
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000`
+- API docs: `http://localhost:8000/docs`
+- PostgreSQL: `localhost:5435`
 
-Create environment files:
+## 2) Place dataset files
+
+Copy the two assessment CSVs into:
+
+`backend/data/`
+
+Expected files:
+- `backend/data/aggregated_data.csv`
+- `backend/data/forecast_data.csv`
+
+## 3) Run data migration
 
 ```bash
-# Backend environment
-cp backend/.env.example backend/.env
-
-# Update backend/.env with your settings if needed
+docker-compose exec backend python run_migration.py
 ```
 
-### 3. Start with Docker Compose
+This will:
+- create SKU records from unique `item_id`
+- load historical weekly actuals
+- flatten and load forecast weekly rows
 
-```bash
-# Start all services (PostgreSQL, Backend, Frontend)
-docker-compose up -d
+## 4) Open the app
 
-# View logs
-docker-compose logs -f
-```
+- Home page: `http://localhost:3000`
+- Click an alert card or use search to open SKU Workbench
 
-### 4. Access the Application
+## Local Development (Without Docker)
 
-- **Frontend Dashboard**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
-- **PostgreSQL**: localhost:5432 (postgres/password123)
-
-## 🔧 Development Setup
-
-### Backend Development
+### Backend
 
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate
 pip install -r requirements.txt
-
-# Set environment variables
-export DATABASE_URL="postgresql://postgres:password123@localhost:5432/demand_planning"
-
-# Run development server
+export DATABASE_URL="postgresql://postgres:password123@localhost:5435/demand_planning"
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Frontend Development
+### Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Set environment variables
 export NEXT_PUBLIC_API_URL="http://localhost:8000"
-
-# Run development server
 npm run dev
 ```
 
-## 📊 Database Schema
+## Technical Notes
 
-### Core Tables
+- **Backend framework**: FastAPI with SQLAlchemy session-per-request pattern via `Depends(get_db)`.
+- **Relational model**: `skus` is the parent entity; `sales_data` and `forecasts` reference SKU via `item_id`.
+- **CSV migration flow**:
+  - Parse `aggregated_data.csv` and create missing SKUs.
+  - Derive `revenue = units_sold * avg_unit_price` from demand-driver payload.
+  - Parse `forecast_data.csv` and flatten each `forecasts` JSON array into one DB row per forecast week.
+- **Time-series alignment**: SKU timeline APIs anchor on latest available actual week (fallback to latest forecast week) and return a continuous weekly index for chart stability.
+- **CORS**: configured for local frontend origins on ports `3000` and `3001`.
+- **Validation**: request bounds enforced through FastAPI query constraints (e.g., pagination and week-range limits on CRUD endpoints).
 
-1. **SKUs** - Product information and metadata
-2. **Sales Data** - Weekly sales performance by SKU
-3. **Forecasts** - AI-generated demand predictions
+## Reviewer Checklist
 
-### Key Relationships
+- [x] Local DB setup (PostgreSQL)
+- [x] CSV ingestion pipeline
+- [x] REST API for dashboard and SKU views
+- [x] Two-page frontend consuming backend APIs
+- [x] README with setup + schema/API notes
 
-- SKUs have many Sales Data records
-- SKUs have many Forecasts
-- Sales Data links to SKUs via item_id
-- Forecasts link to SKUs via item_id
+## Assumptions & Notes
 
-## 🔌 API Endpoints
-
-### SKU Management
-- `GET /api/v1/skus` - List all SKUs with filtering
-- `GET /api/v1/skus/{item_id}` - Get SKU details with sales/forecasts
-- `POST /api/v1/skus` - Create new SKU
-- `PUT /api/v1/skus/{item_id}` - Update SKU
-- `DELETE /api/v1/skus/{item_id}` - Delete SKU
-
-### Sales Data
-- `GET /api/v1/sales` - List sales data with filtering
-- `GET /api/v1/sales/summary` - Dashboard summary metrics
-- `GET /api/v1/sales/{item_id}/weekly` - Weekly sales for specific SKU
-- `POST /api/v1/sales` - Create sales record
-- `POST /api/v1/sales/bulk` - Bulk import sales data
-
-### Forecasts
-- `GET /api/v1/forecasts` - List forecasts with filtering
-- `GET /api/v1/forecasts/{item_id}/latest` - Latest forecast for SKU
-- `GET /api/v1/forecasts/{item_id}/history` - Forecast history
-- `GET /api/v1/forecasts/summary` - Forecast summary metrics
-- `POST /api/v1/forecasts` - Create forecast
-- `PUT /api/v1/forecasts/{id}` - Update forecast
-
-## 📈 Features
-
-### Dashboard Overview
-- Total units sold and revenue metrics
-- Active SKU count
-- Active forecast count
-- Weekly sales trend visualization
-- Top performing SKUs table
-
-### SKU Management
-- Complete CRUD operations
-- Category and brand filtering
-- Supplier information tracking
-- Cost and pricing data
-
-### Sales Analytics
-- Weekly sales performance tracking
-- Regional sales breakdown
-- Historical trend analysis
-- Revenue and unit metrics
-
-### Demand Forecasting
-- AI-generated predictions
-- Confidence scoring
-- Multiple forecast periods (weekly/monthly)
-- Forecast accuracy tracking
-
-## 🔄 Data Migration
-
-After setup, you'll be ready to import your CSV files:
-
-1. **SKU Data CSV** - Product catalog information
-2. **Sales Data CSV** - Historical sales performance
-
-The system provides bulk import endpoints for efficient data migration.
-
-## 🛠️ Technology Stack
-
-### Backend
-- **FastAPI**: Modern Python web framework
-- **SQLAlchemy**: ORM for database operations
-- **Pydantic**: Data validation and serialization
-- **Alembic**: Database migrations
-- **PostgreSQL**: Primary database
-- **Uvicorn**: ASGI server
-
-### Frontend
-- **Next.js 14**: React framework with App Router
-- **TypeScript**: Type-safe JavaScript
-- **Tailwind CSS**: Utility-first CSS framework
-- **Heroicons**: Icon library
-- **Axios**: HTTP client
-- **Recharts**: Chart library (ready for implementation)
-
-### DevOps
-- **Docker**: Containerization
-- **Docker Compose**: Multi-service orchestration
-- **PostgreSQL**: Database service
-
-## 🔒 Security Considerations
-
-- Environment variables for sensitive configuration
-- CORS configuration for frontend-backend communication
-- Input validation with Pydantic schemas
-- SQL injection prevention with SQLAlchemy ORM
-
-## 📝 Next Steps
-
-1. **Import CSV Data**: Use the bulk import endpoints to load your historical data
-2. **Implement Charts**: Enhance the dashboard with Recharts visualizations
-3. **Add Authentication**: Implement user authentication and authorization
-4. **Forecast Models**: Integrate ML models for demand prediction
-5. **Real-time Updates**: Add WebSocket support for live data updates
-
-## 🤝 Contributing
-
-1. Follow the existing code structure and patterns
-2. Add tests for new features
-3. Update documentation for API changes
-4. Use TypeScript for all frontend code
-5. Follow Python PEP 8 for backend code
-
-## 📞 Support
-
-For issues and questions:
-1. Check the API documentation at http://localhost:8000/docs
-2. Review the application logs: `docker-compose logs`
-3. Verify database connectivity and migrations
-
----
-
-**Ready for CSV data import and further development!** 🚀
+- The dashboard uses the most recent available inference context for forecast-facing views.
+- Historical and projected driver values are exposed through dedicated SKU detail APIs for side-panel visualization.
+- Authentication is out of scope.
