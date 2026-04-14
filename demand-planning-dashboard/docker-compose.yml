@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: demand_planning_db
+    environment:
+      POSTGRES_DB: demand_planning
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - demand_planning_network
+
+  backend:
+    build: ./backend
+    container_name: demand_planning_backend
+    environment:
+      DATABASE_URL: postgresql://postgres:password123@postgres:5432/demand_planning
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    volumes:
+      - ./backend:/app
+    networks:
+      - demand_planning_network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build: ./frontend
+    container_name: demand_planning_frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - demand_planning_network
+
+volumes:
+  postgres_data:
+
+networks:
+  demand_planning_network:
+    driver: bridge

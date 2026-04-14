@@ -1,0 +1,29 @@
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Next.js / Node
+demand-planning-dashboard/frontend/node_modules/
+demand-planning-dashboard/frontend/.next/
+demand-planning-dashboard/frontend/out/
