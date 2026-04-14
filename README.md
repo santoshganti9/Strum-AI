@@ -1,8 +1,6 @@
-# Demand Planning Dashboard (Take-Home Assessment)
+# Demand Planning Dashboard
 
-This repository contains my submission for the **Demand Planning Dashboard** take-home assessment.
-
-The solution ingests the provided datasets (`aggregated_data.csv` and `forecast_data.csv`), loads them into a local database, serves them through a backend API, and visualizes them in a two-page Next.js dashboard.
+We take the provided datasets (`aggregated_data.csv` and `forecast_data.csv`), load them into a local database, serve them through a backend API, and visualize them in a two-page Next.js dashboard.
 
 ## Assessment Requirements Mapped
 
