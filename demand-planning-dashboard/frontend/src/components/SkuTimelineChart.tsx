@@ -82,34 +82,34 @@ const SkuTimelineChart = ({
       const data = payload[0].payload
       return (
         <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-semibold text-gray-900">{`Week ending: ${format(parseISO(data.fullDate), 'MMM dd, yyyy')}`}</p>
-          <p className="text-sm text-gray-600 mb-2">{`Type: ${data.type.replace('_', ' ')}`}</p>
-          
+          <p className="font-semibold text-gray-900">{`Week ending: ${format(parseISO(data.fullDate), "MMM dd, yyyy")}`}</p>
+          <p className="text-sm text-gray-600 mb-2">{`Type: ${data.type.replace("_", " ")}`}</p>
+
           {/* Current year data */}
-          {selectedMetric === 'units' ? (
-            <p className="text-blue-600">{`Current Units: ${data.units?.toLocaleString() || 'N/A'}`}</p>
+          {selectedMetric === "units" ? (
+            <p className="text-blue-600">{`Units: ${data.units?.toLocaleString() || "N/A"}`}</p>
           ) : (
-            <p className="text-blue-600">{`Current Revenue: $${data.revenue?.toLocaleString() || 'N/A'}`}</p>
+            <p className="text-blue-600">{`Current Revenue: $${data.revenue?.toLocaleString() || "N/A"}`}</p>
           )}
-          
+
           {/* Previous year data */}
-          {showPreviousYear && data.previousYearUnits !== null && (
-            selectedMetric === 'units' ? (
+          {showPreviousYear &&
+            data.previousYearUnits !== null &&
+            (selectedMetric === "units" ? (
               <p className="text-orange-600">{`Previous Year Units: ${data.previousYearUnits.toLocaleString()}`}</p>
             ) : (
-              <p className="text-orange-600">{`Previous Year Revenue: $${data.previousYearRevenue?.toLocaleString() || 'N/A'}`}</p>
-            )
-          )}
-          
+              <p className="text-orange-600">{`Previous Year Revenue: $${data.previousYearRevenue?.toLocaleString() || "N/A"}`}</p>
+            ))}
+
           {/* Additional metrics */}
-          <p className="text-purple-600">{`Avg Price: $${data.avg_unit_price?.toFixed(2) || 'N/A'}`}</p>
+          {/* <p className="text-purple-600">{`Avg Price: $${data.avg_unit_price?.toFixed(2) || "N/A"}`}</p> */}
           <p className="text-green-600">{`In Stock: ${((data.cust_instock || 0) * 100).toFixed(1)}%`}</p>
-          
-          {data.type === 'forecast' && data.confidence && (
+
+          {data.type === "forecast" && data.confidence && (
             <p className="text-red-600">{`Confidence: ${data.confidence.toFixed(1)}%`}</p>
           )}
         </div>
-      )
+      );
     }
     return null
   }
@@ -131,7 +131,8 @@ const SkuTimelineChart = ({
             52-Week Timeline: {itemName}
           </h3>
           <p className="text-sm text-gray-600">
-            {itemId} • Historical (13 weeks) + Forecast (39 weeks) + Previous Year Comparison
+            {itemId} • Historical (13 weeks) + Forecast (39 weeks) + Previous
+            Year Comparison
           </p>
         </div>
       </div>
@@ -142,14 +143,16 @@ const SkuTimelineChart = ({
           <label className="text-sm font-medium text-gray-700">Metric:</label>
           <select
             value={selectedMetric}
-            onChange={(e) => setSelectedMetric(e.target.value as 'units' | 'revenue')}
+            onChange={(e) =>
+              setSelectedMetric(e.target.value as "units" | "revenue")
+            }
             className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="units">Units Sold</option>
             <option value="revenue">Revenue</option>
           </select>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -158,7 +161,10 @@ const SkuTimelineChart = ({
             onChange={(e) => setShowPreviousYear(e.target.checked)}
             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
-          <label htmlFor="showPreviousYear" className="text-sm font-medium text-gray-700">
+          <label
+            htmlFor="showPreviousYear"
+            className="text-sm font-medium text-gray-700"
+          >
             Show Previous Year
           </label>
         </div>
@@ -171,7 +177,10 @@ const SkuTimelineChart = ({
             onChange={(e) => setShowConfidence(e.target.checked)}
             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
-          <label htmlFor="showConfidence" className="text-sm font-medium text-gray-700">
+          <label
+            htmlFor="showConfidence"
+            className="text-sm font-medium text-gray-700"
+          >
             Show Confidence Score
           </label>
         </div>
@@ -203,21 +212,24 @@ const SkuTimelineChart = ({
       {/* Chart */}
       <div className="bg-white p-4 rounded-lg border">
         <ResponsiveContainer width="100%" height={height}>
-          <LineChart data={combinedData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+          <LineChart
+            data={combinedData}
+            margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis 
-              dataKey="date" 
+            <XAxis
+              dataKey="date"
               stroke="#666"
               fontSize={12}
               angle={-45}
               textAnchor="end"
               height={60}
             />
-            <YAxis 
+            <YAxis
               stroke="#666"
               fontSize={12}
-              tickFormatter={(value) => 
-                selectedMetric === 'revenue' 
+              tickFormatter={(value) =>
+                selectedMetric === "revenue"
                   ? `$${(value / 1000).toFixed(0)}K`
                   : value.toLocaleString()
               }
@@ -227,9 +239,9 @@ const SkuTimelineChart = ({
 
             {/* Reference line to separate historical from forecast */}
             {boundaryIndex > 0 && (
-              <ReferenceLine 
-                x={combinedData[boundaryIndex - 1]?.date} 
-                stroke="#ff6b6b" 
+              <ReferenceLine
+                x={combinedData[boundaryIndex - 1]?.date}
+                stroke="#ff6b6b"
                 strokeDasharray="5 5"
                 label={{ value: "Today", position: "top" }}
               />
@@ -238,37 +250,45 @@ const SkuTimelineChart = ({
             {/* Current year historical data */}
             <Line
               type="monotone"
-              dataKey={selectedMetric === 'units' ? 'currentUnits' : 'currentRevenue'}
+              dataKey={
+                selectedMetric === "units" ? "currentUnits" : "currentRevenue"
+              }
               stroke="#3b82f6"
               strokeWidth={3}
-              dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+              dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4 }}
               connectNulls={false}
-              name={`Current ${selectedMetric === 'units' ? 'Units' : 'Revenue'} (Historical)`}
+              name={`Current ${selectedMetric === "units" ? "Units" : "Revenue"} (Historical)`}
             />
 
             {/* Current year forecast data */}
             <Line
               type="monotone"
-              dataKey={selectedMetric === 'units' ? 'forecastUnits' : 'forecastRevenue'}
+              dataKey={
+                selectedMetric === "units" ? "forecastUnits" : "forecastRevenue"
+              }
               stroke="#10b981"
               strokeWidth={3}
               strokeDasharray="8 4"
-              dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+              dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }}
               connectNulls={false}
-              name={`Current ${selectedMetric === 'units' ? 'Units' : 'Revenue'} (Forecast)`}
+              name={`Current ${selectedMetric === "units" ? "Units" : "Revenue"} (Forecast)`}
             />
 
             {/* Previous year data */}
             {showPreviousYear && (
               <Line
                 type="monotone"
-                dataKey={selectedMetric === 'units' ? 'previousYearUnits' : 'previousYearRevenue'}
+                dataKey={
+                  selectedMetric === "units"
+                    ? "previousYearUnits"
+                    : "previousYearRevenue"
+                }
                 stroke="#f97316"
                 strokeWidth={2}
                 strokeDasharray="4 2"
-                dot={{ fill: '#f97316', strokeWidth: 1, r: 3 }}
+                dot={{ fill: "#f97316", strokeWidth: 1, r: 3 }}
                 connectNulls={false}
-                name={`Previous Year ${selectedMetric === 'units' ? 'Units' : 'Revenue'}`}
+                name={`Previous Year ${selectedMetric === "units" ? "Units" : "Revenue"}`}
               />
             )}
 
@@ -279,7 +299,7 @@ const SkuTimelineChart = ({
                 dataKey="confidence"
                 stroke="#ef4444"
                 strokeWidth={2}
-                dot={{ fill: '#ef4444', strokeWidth: 1, r: 2 }}
+                dot={{ fill: "#ef4444", strokeWidth: 1, r: 2 }}
                 connectNulls={false}
                 name="Confidence %"
                 yAxisId="confidence"
@@ -288,7 +308,7 @@ const SkuTimelineChart = ({
 
             {/* Secondary Y-axis for confidence */}
             {showConfidence && (
-              <YAxis 
+              <YAxis
                 yAxisId="confidence"
                 orientation="right"
                 stroke="#ef4444"
@@ -299,9 +319,9 @@ const SkuTimelineChart = ({
             )}
 
             {/* Brush for zooming */}
-            <Brush 
-              dataKey="date" 
-              height={30} 
+            <Brush
+              dataKey="date"
+              height={30}
               stroke="#8884d8"
               fill="#f0f0f0"
               startIndex={Math.max(0, combinedData.length - 26)} // Show last 26 weeks by default
@@ -315,13 +335,15 @@ const SkuTimelineChart = ({
         <div className="bg-blue-50 p-3 rounded-lg">
           <div className="font-semibold text-blue-900">Historical Period</div>
           <div className="text-blue-700">
-            {combinedData.filter(d => d.type === 'historical').length} weeks of actual data
+            {combinedData.filter((d) => d.type === "historical").length} weeks
+            of actual data
           </div>
         </div>
         <div className="bg-green-50 p-3 rounded-lg">
           <div className="font-semibold text-green-900">Forecast Period</div>
           <div className="text-green-700">
-            {combinedData.filter(d => d.type === 'forecast').length} weeks projected
+            {combinedData.filter((d) => d.type === "forecast").length} weeks
+            projected
           </div>
         </div>
         <div className="bg-orange-50 p-3 rounded-lg">
@@ -330,7 +352,7 @@ const SkuTimelineChart = ({
             {previousYearData.length} weeks comparison data
           </div>
         </div>
-        <div className="bg-red-50 p-3 rounded-lg">
+        {/* <div className="bg-red-50 p-3 rounded-lg">
           <div className="font-semibold text-red-900">Avg Confidence</div>
           <div className="text-red-700">
             {combinedData.filter(d => d.confidence).length > 0 
@@ -338,10 +360,10 @@ const SkuTimelineChart = ({
               : 'N/A'
             }
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
-  )
+  );
 }
 
 export default SkuTimelineChart

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeftIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 import SkuTimelineChart from '@/components/SkuTimelineChart'
-import DemandDriversPanel from '@/components/DemandDriversPanel'
+import DemandDriversSidePanel from "@/components/DemandDriversSidePanel";
 import { skuDetailAPI } from '@/lib/api'
 
 interface SkuDetails {
@@ -52,11 +52,10 @@ interface PreviousYearData {
 }
 
 interface DemandDriverData {
-  week_ending: string
-  avg_unit_price: number
-  cust_instock: number
-  units_sold: number | null
-  type: 'historical' | 'projected'
+  week_ending: string;
+  units_sold: number;
+  revenue: number;
+  type: "historical";
 }
 
 export default function SkuDetailPage() {
@@ -165,7 +164,7 @@ export default function SkuDetailPage() {
           <div className="py-6">
             <div className="flex items-center gap-4 mb-4">
               <button
-                onClick={() => router.push('/')}
+                onClick={() => router.push("/")}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <ArrowLeftIcon className="h-5 w-5 text-gray-600" />
@@ -175,7 +174,8 @@ export default function SkuDetailPage() {
                   SKU Detail: Demand Planning Workbench
                 </h1>
                 <p className="mt-1 text-sm text-gray-600">
-                  Comprehensive analysis for {skuDetails.sku_info.item_name} ({skuDetails.sku_info.item_id})
+                  Comprehensive analysis for {skuDetails.sku_info.item_name} (
+                  {skuDetails.sku_info.item_id})
                 </p>
               </div>
               <div className="ml-auto">
@@ -207,7 +207,9 @@ export default function SkuDetailPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Units Sold</dt>
+                      <dt className="text-sm font-medium text-gray-500 truncate">
+                        Total Units Sold
+                      </dt>
                       <dd className="text-lg font-medium text-gray-900">
                         {skuDetails.sales_summary.total_units_sold.toLocaleString()}
                       </dd>
@@ -227,9 +229,12 @@ export default function SkuDetailPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Revenue</dt>
+                      <dt className="text-sm font-medium text-gray-500 truncate">
+                        Total Revenue
+                      </dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        ${skuDetails.sales_summary.total_revenue.toLocaleString()}
+                        $
+                        {skuDetails.sales_summary.total_revenue.toLocaleString()}
                       </dd>
                     </dl>
                   </div>
@@ -247,7 +252,9 @@ export default function SkuDetailPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Avg Price</dt>
+                      <dt className="text-sm font-medium text-gray-500 truncate">
+                        Avg Price
+                      </dt>
                       <dd className="text-lg font-medium text-gray-900">
                         ${skuDetails.sales_summary.avg_price.toFixed(2)}
                       </dd>
@@ -267,9 +274,14 @@ export default function SkuDetailPage() {
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Forecast Confidence</dt>
+                      <dt className="text-sm font-medium text-gray-500 truncate">
+                        Forecast Confidence
+                      </dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        {(skuDetails.forecast_summary.avg_confidence * 100).toFixed(1)}%
+                        {(
+                          skuDetails.forecast_summary.avg_confidence * 100
+                        ).toFixed(1)}
+                        %
                       </dd>
                     </dl>
                   </div>
@@ -280,34 +292,48 @@ export default function SkuDetailPage() {
 
           {/* SKU Information */}
           <div className="bg-white shadow rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">SKU Information</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              SKU Information
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <dt className="text-sm font-medium text-gray-500">Category</dt>
-                <dd className="mt-1 text-sm text-gray-900">{skuDetails.sku_info.category || 'N/A'}</dd>
+                <dd className="mt-1 text-sm text-gray-900">
+                  {skuDetails.sku_info.category || "N/A"}
+                </dd>
               </div>
               <div>
                 <dt className="text-sm font-medium text-gray-500">Brand</dt>
-                <dd className="mt-1 text-sm text-gray-900">{skuDetails.sku_info.brand || 'N/A'}</dd>
+                <dd className="mt-1 text-sm text-gray-900">
+                  {skuDetails.sku_info.brand || "N/A"}
+                </dd>
               </div>
               <div>
                 <dt className="text-sm font-medium text-gray-500">Supplier</dt>
-                <dd className="mt-1 text-sm text-gray-900">{skuDetails.sku_info.supplier || 'N/A'}</dd>
+                <dd className="mt-1 text-sm text-gray-900">
+                  {skuDetails.sku_info.supplier || "N/A"}
+                </dd>
               </div>
               <div>
                 <dt className="text-sm font-medium text-gray-500">Unit Cost</dt>
                 <dd className="mt-1 text-sm text-gray-900">
-                  {skuDetails.sku_info.unit_cost ? `$${skuDetails.sku_info.unit_cost.toFixed(2)}` : 'N/A'}
+                  {skuDetails.sku_info.unit_cost
+                    ? `$${skuDetails.sku_info.unit_cost.toFixed(2)}`
+                    : "N/A"}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-gray-500">Total Transactions</dt>
+                <dt className="text-sm font-medium text-gray-500">
+                  Total Transactions
+                </dt>
                 <dd className="mt-1 text-sm text-gray-900">
                   {skuDetails.sales_summary.total_transactions.toLocaleString()}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-gray-500">Total Forecasts</dt>
+                <dt className="text-sm font-medium text-gray-500">
+                  Total Forecasts
+                </dt>
                 <dd className="mt-1 text-sm text-gray-900">
                   {skuDetails.forecast_summary.total_forecasts.toLocaleString()}
                 </dd>
@@ -330,54 +356,71 @@ export default function SkuDetailPage() {
           {/* Performance Summary */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white shadow rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Sales Performance</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Sales Performance
+              </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">First Sale Date:</span>
+                  <span className="text-sm text-gray-600">
+                    First Sale Date:
+                  </span>
                   <span className="text-sm font-medium text-gray-900">
-                    {skuDetails.sales_summary.first_sale_date 
-                      ? new Date(skuDetails.sales_summary.first_sale_date).toLocaleDateString()
-                      : 'N/A'
-                    }
+                    {skuDetails.sales_summary.first_sale_date
+                      ? new Date(
+                          skuDetails.sales_summary.first_sale_date,
+                        ).toLocaleDateString()
+                      : "N/A"}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Last Sale Date:</span>
                   <span className="text-sm font-medium text-gray-900">
-                    {skuDetails.sales_summary.last_sale_date 
-                      ? new Date(skuDetails.sales_summary.last_sale_date).toLocaleDateString()
-                      : 'N/A'
-                    }
+                    {skuDetails.sales_summary.last_sale_date
+                      ? new Date(
+                          skuDetails.sales_summary.last_sale_date,
+                        ).toLocaleDateString()
+                      : "N/A"}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Historical Weeks:</span>
+                  <span className="text-sm text-gray-600">
+                    Historical Weeks:
+                  </span>
                   <span className="text-sm font-medium text-gray-900">
-                    {timelineData.filter(d => d.type === 'historical').length} weeks
+                    {timelineData.filter((d) => d.type === "historical").length}{" "}
+                    weeks
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="bg-white shadow rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Forecast Performance</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Forecast Performance
+              </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Predicted Units:</span>
+                  <span className="text-sm text-gray-600">
+                    Predicted Units:
+                  </span>
                   <span className="text-sm font-medium text-gray-900">
                     {skuDetails.forecast_summary.total_predicted_units.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Predicted Revenue:</span>
+                  <span className="text-sm text-gray-600">
+                    Predicted Revenue:
+                  </span>
                   <span className="text-sm font-medium text-gray-900">
-                    ${skuDetails.forecast_summary.total_predicted_revenue.toLocaleString()}
+                    $
+                    {skuDetails.forecast_summary.total_predicted_revenue.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Forecast Weeks:</span>
                   <span className="text-sm font-medium text-gray-900">
-                    {timelineData.filter(d => d.type === 'forecast').length} weeks
+                    {timelineData.filter((d) => d.type === "forecast").length}{" "}
+                    weeks
                   </span>
                 </div>
               </div>
@@ -387,7 +430,7 @@ export default function SkuDetailPage() {
       </div>
 
       {/* Demand Drivers Side Panel */}
-      <DemandDriversPanel
+      <DemandDriversSidePanel
         isOpen={showDemandDrivers}
         onClose={() => setShowDemandDrivers(false)}
         demandDriversData={demandDriversData}
@@ -396,5 +439,5 @@ export default function SkuDetailPage() {
         itemName={skuDetails.sku_info.item_name}
       />
     </div>
-  )
+  );
 }
