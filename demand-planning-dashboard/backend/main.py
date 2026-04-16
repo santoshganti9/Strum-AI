@@ -6,7 +6,7 @@ from database import engine
 from models import Base
 
 from routers import (
-    demand_planning_simple as demand_planning,
+    demand_planning,
     forecasts,
     sales,
     sku_detail_simple as sku_detail,
@@ -28,8 +28,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
+        "http://localhost:3002",
+        "http://127.0.0.1:3002",
     ],
     allow_credentials=True,
     allow_methods=["*"],

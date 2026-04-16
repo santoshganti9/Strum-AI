@@ -1,13 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, and_
-from datetime import datetime, timedelta
+from datetime import timedelta, date
 from typing import List, Optional
 import pandas as pd
+import logging
 
 from database import get_db
 from models import SKU, SalesData, Forecast
-from schemas import *
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Anchor date: latest date in historical data (2025-04-20)
+ANCHOR_DATE = date(2025, 4, 20)
 
 router = APIRouter(tags=["demand-planning"])
 
@@ -23,8 +29,8 @@ def get_historical_sales(
     """
     try:
         # Calculate the date range
-        end_date = datetime.now().date()
-        start_date = end_date - timedelta(weeks=weeks * 7)
+        end_date = ANCHOR_DATE
+        start_date = end_date - timedelta(weeks=weeks)
 
         # Base query
         query = db.query(
@@ -65,6 +71,7 @@ def get_historical_sales(
         }
 
     except Exception as e:
+        logger.error(f"Error fetching historical sales: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Error fetching historical sales: {str(e)}"
         )
@@ -81,8 +88,8 @@ def get_forecast_data(
     """
     try:
         # Calculate the date range for forecasts
-        start_date = datetime.now().date()
-        end_date = start_date + timedelta(weeks=weeks * 7)
+        start_date = ANCHOR_DATE
+        end_date = start_date + timedelta(weeks=weeks)
 
         # Base query for active forecasts
         query = db.query(
@@ -131,6 +138,7 @@ def get_forecast_data(
         }
 
     except Exception as e:
+        logger.error(f"Error fetching forecast data: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Error fetching forecast data: {str(e)}"
         )
@@ -171,6 +179,7 @@ def get_combined_timeline(
         }
 
     except Exception as e:
+        logger.error(f"Error fetching combined timeline: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Error fetching combined timeline: {str(e)}"
         )
@@ -200,7 +209,7 @@ def get_forecast_accuracy_alerts(
             .join(SKU, Forecast.item_id == SKU.item_id)
             .filter(
                 Forecast.is_active == True,
-                Forecast.forecast_date >= datetime.now().date(),
+                Forecast.forecast_date >= ANCHOR_DATE,
             )
             .group_by(Forecast.item_id, SKU.item_name)
             .having(func.avg(Forecast.confidence_score) < confidence_threshold)
@@ -222,7 +231,7 @@ def get_forecast_accuracy_alerts(
             .join(SKU, Forecast.item_id == SKU.item_id)
             .filter(
                 Forecast.is_active == True,
-                Forecast.forecast_date >= datetime.now().date(),
+                Forecast.forecast_date >= ANCHOR_DATE,
             )
             .group_by(Forecast.item_id, SKU.item_name)
             .having(
@@ -288,6 +297,9 @@ def get_forecast_accuracy_alerts(
         }
 
     except Exception as e:
+        logger.error(
+            f"Error fetching forecast accuracy alerts: {str(e)}", exc_info=True
+        )
         raise HTTPException(
             status_code=500, detail=f"Error fetching forecast accuracy alerts: {str(e)}"
         )
@@ -300,7 +312,7 @@ def get_summary_stats(db: Session = Depends(get_db)):
     """
     try:
         # Get current date for calculations
-        current_date = datetime.now().date()
+        current_date = ANCHOR_DATE
         last_week = current_date - timedelta(days=7)
 
         # Historical sales summary
@@ -365,6 +377,7 @@ def get_summary_stats(db: Session = Depends(get_db)):
         }
 
     except Exception as e:
+        logger.error(f"Error fetching summary stats: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Error fetching summary stats: {str(e)}"
         )
