@@ -9,7 +9,7 @@ from routers import (
     demand_planning,
     forecasts,
     sales,
-    sku_detail_simple as sku_detail,
+    sku_detail,
     skus,
 )
 

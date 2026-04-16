@@ -1,12 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, extract
-from datetime import datetime, timedelta
+from datetime import timedelta, date
 from typing import Optional, List
 import json
+import logging
 
 from database import get_db
 from models import SKU, SalesData, Forecast
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Anchor date: latest date in historical data (2025-04-20)
+ANCHOR_DATE = date(2025, 4, 20)
 
 router = APIRouter(tags=["sku-detail"])
 
@@ -73,6 +80,7 @@ def get_sku_details(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error fetching SKU details: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching SKU details: {str(e)}")
 
 @router.get("/sku/{item_id}/timeline")
@@ -90,63 +98,71 @@ def get_sku_timeline(
         sku = db.query(SKU).filter(SKU.item_id == item_id).first()
         if not sku:
             raise HTTPException(status_code=404, detail=f"SKU {item_id} not found")
-        
-        current_date = datetime.now().date()
-        
+
+        current_date = ANCHOR_DATE
+
         # Get historical data
         historical_start = current_date - timedelta(weeks=historical_weeks)
-        historical_data = db.query(
-            SalesData.week_ending,
-            func.sum(SalesData.units_sold).label('units_sold'),
-            func.sum(SalesData.revenue).label('revenue'),
-            func.avg(func.cast(func.json_extract(SalesData.demand_drivers, '$.avg_unit_price'), float)).label('avg_unit_price'),
-            func.avg(func.cast(func.json_extract(SalesData.demand_drivers, '$.cust_instock'), float)).label('cust_instock')
-        ).filter(
-            SalesData.item_id == item_id,
-            SalesData.week_ending >= historical_start,
-            SalesData.week_ending <= current_date
-        ).group_by(SalesData.week_ending).order_by(SalesData.week_ending).all()
-        
+        historical_data = (
+            db.query(
+                SalesData.week_ending,
+                func.sum(SalesData.units_sold).label("units_sold"),
+                func.sum(SalesData.revenue).label("revenue"),
+            )
+            .filter(
+                SalesData.item_id == item_id,
+                SalesData.week_ending >= historical_start,
+                SalesData.week_ending <= current_date,
+            )
+            .group_by(SalesData.week_ending)
+            .order_by(SalesData.week_ending)
+            .all()
+        )
+
         # Get forecast data
         forecast_end = current_date + timedelta(weeks=forecast_weeks)
-        forecast_data = db.query(
-            Forecast.forecast_date,
-            func.sum(Forecast.predicted_units).label('predicted_units'),
-            func.sum(Forecast.predicted_revenue).label('predicted_revenue'),
-            func.avg(Forecast.confidence_score).label('confidence_score')
-        ).filter(
-            Forecast.item_id == item_id,
-            Forecast.forecast_date > current_date,
-            Forecast.forecast_date <= forecast_end,
-            Forecast.is_active == True
-        ).group_by(Forecast.forecast_date).order_by(Forecast.forecast_date).all()
-        
+        forecast_data = (
+            db.query(
+                Forecast.forecast_date,
+                func.sum(Forecast.predicted_units).label("predicted_units"),
+                func.sum(Forecast.predicted_revenue).label("predicted_revenue"),
+                func.avg(Forecast.confidence_score).label("confidence_score"),
+            )
+            .filter(
+                Forecast.item_id == item_id,
+                Forecast.forecast_date > current_date,
+                Forecast.forecast_date <= forecast_end,
+                Forecast.is_active == True,
+            )
+            .group_by(Forecast.forecast_date)
+            .order_by(Forecast.forecast_date)
+            .all()
+        )
+
         # Format historical data
         timeline_data = []
         for record in historical_data:
-            timeline_data.append({
-                "week_ending": record.week_ending.isoformat(),
-                "units": int(record.units_sold or 0),
-                "revenue": float(record.revenue or 0),
-                "avg_unit_price": float(record.avg_unit_price or 0),
-                "cust_instock": float(record.cust_instock or 0),
-                "type": "historical"
-            })
-        
+            timeline_data.append(
+                {
+                    "week_ending": record.week_ending.isoformat(),
+                    "units": int(record.units_sold or 0),
+                    "revenue": float(record.revenue or 0),
+                    "type": "historical",
+                }
+            )
+
         # Format forecast data
         for record in forecast_data:
-            # Simulate demand drivers for forecast (in real scenario, these would come from forecast model)
-            base_price = timeline_data[-1]["avg_unit_price"] if timeline_data else 10.0
-            timeline_data.append({
-                "week_ending": record.forecast_date.isoformat(),
-                "units": int(record.predicted_units or 0),
-                "revenue": float(record.predicted_revenue or 0),
-                "avg_unit_price": base_price * (1 + 0.02),  # Simulate price growth
-                "cust_instock": 0.85,  # Simulate target stock level
-                "confidence_score": float(record.confidence_score or 0.5),
-                "type": "forecast"
-            })
-        
+            timeline_data.append(
+                {
+                    "week_ending": record.forecast_date.isoformat(),
+                    "units": int(record.predicted_units or 0),
+                    "revenue": float(record.predicted_revenue or 0),
+                    "confidence_score": float(record.confidence_score or 0.5),
+                    "type": "forecast",
+                }
+            )
+
         return {
             "item_id": item_id,
             "item_name": sku.item_name,
@@ -155,21 +171,29 @@ def get_sku_timeline(
                 "historical_weeks": historical_weeks,
                 "forecast_weeks": forecast_weeks,
                 "total_weeks": len(timeline_data),
-                "historical_records": len([d for d in timeline_data if d["type"] == "historical"]),
-                "forecast_records": len([d for d in timeline_data if d["type"] == "forecast"])
-            }
+                "historical_records": len(
+                    [d for d in timeline_data if d["type"] == "historical"]
+                ),
+                "forecast_records": len(
+                    [d for d in timeline_data if d["type"] == "forecast"]
+                ),
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching SKU timeline: {str(e)}")
+        logger.error(f"Error fetching SKU timeline: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail=f"Error fetching SKU timeline: {str(e)}"
+        )
+
 
 @router.get("/sku/{item_id}/previous-year")
 def get_sku_previous_year(
     item_id: str = Path(..., description="SKU Item ID"),
     weeks: int = Query(52, description="Number of weeks to compare"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Get previous year same week actuals for comparison
@@ -179,35 +203,43 @@ def get_sku_previous_year(
         sku = db.query(SKU).filter(SKU.item_id == item_id).first()
         if not sku:
             raise HTTPException(status_code=404, detail=f"SKU {item_id} not found")
-        
-        current_date = datetime.now().date()
-        
+
+        current_date = ANCHOR_DATE
+
         # Get previous year data (52 weeks ago to current week last year)
         previous_year_start = current_date - timedelta(weeks=weeks + 52)
         previous_year_end = current_date - timedelta(weeks=52)
-        
-        previous_year_data = db.query(
-            SalesData.week_ending,
-            func.sum(SalesData.units_sold).label('units_sold'),
-            func.sum(SalesData.revenue).label('revenue')
-        ).filter(
-            SalesData.item_id == item_id,
-            SalesData.week_ending >= previous_year_start,
-            SalesData.week_ending <= previous_year_end
-        ).group_by(SalesData.week_ending).order_by(SalesData.week_ending).all()
-        
+
+        previous_year_data = (
+            db.query(
+                SalesData.week_ending,
+                func.sum(SalesData.units_sold).label("units_sold"),
+                func.sum(SalesData.revenue).label("revenue"),
+            )
+            .filter(
+                SalesData.item_id == item_id,
+                SalesData.week_ending >= previous_year_start,
+                SalesData.week_ending <= previous_year_end,
+            )
+            .group_by(SalesData.week_ending)
+            .order_by(SalesData.week_ending)
+            .all()
+        )
+
         # Format data with adjusted dates (shift by 52 weeks to align with current year)
         comparison_data = []
         for record in previous_year_data:
             adjusted_date = record.week_ending + timedelta(weeks=52)
-            comparison_data.append({
-                "week_ending": adjusted_date.isoformat(),
-                "original_week_ending": record.week_ending.isoformat(),
-                "units": int(record.units_sold or 0),
-                "revenue": float(record.revenue or 0),
-                "type": "previous_year"
-            })
-        
+            comparison_data.append(
+                {
+                    "week_ending": adjusted_date.isoformat(),
+                    "original_week_ending": record.week_ending.isoformat(),
+                    "units": int(record.units_sold or 0),
+                    "revenue": float(record.revenue or 0),
+                    "type": "previous_year",
+                }
+            )
+
         return {
             "item_id": item_id,
             "item_name": sku.item_name,
@@ -215,20 +247,24 @@ def get_sku_previous_year(
             "comparison_period": {
                 "previous_year_start": previous_year_start.isoformat(),
                 "previous_year_end": previous_year_end.isoformat(),
-                "total_records": len(comparison_data)
-            }
+                "total_records": len(comparison_data),
+            },
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching previous year data: {str(e)}")
+        logger.error(f"Error fetching previous year data: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail=f"Error fetching previous year data: {str(e)}"
+        )
+
 
 @router.get("/sku/{item_id}/demand-drivers")
 def get_sku_demand_drivers(
     item_id: str = Path(..., description="SKU Item ID"),
     weeks: int = Query(52, description="Number of weeks of demand driver data"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Get demand drivers (avg_unit_price, cust_instock) for a specific SKU
@@ -238,77 +274,54 @@ def get_sku_demand_drivers(
         sku = db.query(SKU).filter(SKU.item_id == item_id).first()
         if not sku:
             raise HTTPException(status_code=404, detail=f"SKU {item_id} not found")
-        
-        current_date = datetime.now().date()
+
+        current_date = ANCHOR_DATE
         
         # Get historical demand drivers
         historical_start = current_date - timedelta(weeks=weeks//2)  # Half historical
-        historical_data = db.query(
-            SalesData.week_ending,
-            func.avg(func.cast(func.json_extract(SalesData.demand_drivers, '$.avg_unit_price'), float)).label('avg_unit_price'),
-            func.avg(func.cast(func.json_extract(SalesData.demand_drivers, '$.cust_instock'), float)).label('cust_instock'),
-            func.sum(SalesData.units_sold).label('units_sold')
-        ).filter(
-            SalesData.item_id == item_id,
-            SalesData.week_ending >= historical_start,
-            SalesData.week_ending <= current_date
-        ).group_by(SalesData.week_ending).order_by(SalesData.week_ending).all()
+        historical_data = (
+            db.query(
+                SalesData.week_ending,
+                func.sum(SalesData.units_sold).label("units_sold"),
+                func.sum(SalesData.revenue).label("revenue"),
+            )
+            .filter(
+                SalesData.item_id == item_id,
+                SalesData.week_ending >= historical_start,
+                SalesData.week_ending <= current_date,
+            )
+            .group_by(SalesData.week_ending)
+            .order_by(SalesData.week_ending)
+            .all()
+        )
         
         # Format demand drivers data
         demand_drivers_data = []
         
         # Historical data
         for record in historical_data:
-            demand_drivers_data.append({
-                "week_ending": record.week_ending.isoformat(),
-                "avg_unit_price": float(record.avg_unit_price or 0),
-                "cust_instock": float(record.cust_instock or 0),
-                "units_sold": int(record.units_sold or 0),
-                "type": "historical"
-            })
-        
-        # Simulate future demand drivers (in real scenario, these would come from planning system)
-        forecast_weeks = weeks - len(demand_drivers_data)
-        if forecast_weeks > 0:
-            base_price = demand_drivers_data[-1]["avg_unit_price"] if demand_drivers_data else 10.0
-            base_stock = demand_drivers_data[-1]["cust_instock"] if demand_drivers_data else 0.8
-            
-            for i in range(forecast_weeks):
-                future_date = current_date + timedelta(weeks=i+1)
-                # Simulate price trends and stock planning
-                price_trend = base_price * (1 + 0.001 * i)  # Slight price increase
-                stock_target = max(0.7, base_stock + (0.05 * (i % 4 - 2)))  # Cyclical stock planning
-                
-                demand_drivers_data.append({
-                    "week_ending": future_date.isoformat(),
-                    "avg_unit_price": round(price_trend, 2),
-                    "cust_instock": round(stock_target, 3),
-                    "units_sold": None,  # No actual sales for future
-                    "type": "projected"
-                })
-        
+            demand_drivers_data.append(
+                {
+                    "week_ending": record.week_ending.isoformat(),
+                    "units_sold": int(record.units_sold or 0),
+                    "revenue": float(record.revenue or 0),
+                    "type": "historical",
+                }
+            )
+
         return {
             "item_id": item_id,
             "item_name": sku.item_name,
             "demand_drivers_data": demand_drivers_data,
             "summary": {
                 "total_weeks": len(demand_drivers_data),
-                "historical_weeks": len([d for d in demand_drivers_data if d["type"] == "historical"]),
-                "projected_weeks": len([d for d in demand_drivers_data if d["type"] == "projected"]),
-                "avg_price_range": {
-                    "min": min([d["avg_unit_price"] for d in demand_drivers_data if d["avg_unit_price"] > 0]),
-                    "max": max([d["avg_unit_price"] for d in demand_drivers_data if d["avg_unit_price"] > 0])
-                },
-                "stock_range": {
-                    "min": min([d["cust_instock"] for d in demand_drivers_data if d["cust_instock"] > 0]),
-                    "max": max([d["cust_instock"] for d in demand_drivers_data if d["cust_instock"] > 0])
-                }
-            }
+            },
         }
         
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error fetching demand drivers: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching demand drivers: {str(e)}")
 
 @router.get("/search")
@@ -352,4 +365,5 @@ def search_skus(
         }
         
     except Exception as e:
+        logger.error(f"Error searching SKUs: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error searching SKUs: {str(e)}")
